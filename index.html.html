@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Five Nights at Bob's</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #ddd;
+        }
+
+        .game-container {
+            width: 100%;
+            max-width: 400px;
+            height: 90vh;
+            max-height: 800px;
+            background: #000;
+            border: 5px solid #333;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Office Styling */
+        #office {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #222;
+            transition: background-color 0.5s;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+        }
+
+        /* Camera Screen Styling */
+        #camera-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #111;
+            z-index: 20;
+            transform: translateY(100%);
+            transition: transform 0.3s ease-in-out;
+            color: #8f8; /* Green monochrome feel */
+            padding: 1rem;
+            display: none; /* Controlled by JS */
+        }
+        
+        #camera-screen.active {
+            transform: translateY(0);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .camera-view {
+            background-color: #0d120d;
+            border: 2px solid #5a5;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            position: relative;
+        }
+
+        /* Door and Light Control */
+        .door-control {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 10;
+            width: 60px;
+            height: 180px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+            transition: opacity 0.3s;
+        }
+        .door-control.left { left: 0.5rem; }
+        .door-control.right { right: 0.5rem; }
+
+        .control-button {
+            width: 100%;
+            height: 48%;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+            transition: background-color 0.1s, transform 0.1s;
+        }
+        .control-button:active {
+            transform: scale(0.95);
+        }
+        
+        /* Door visual */
+        .door {
+            position: absolute;
+            top: 0;
+            width: 50px;
+            height: 100%;
+            background-color: #4b5563; /* Gray */
+            z-index: 5;
+            transition: transform 0.5s ease-out;
+        }
+        #door-left { left: 0; transform: translateX(-100%); }
+        #door-right { right: 0; transform: translateX(100%); }
+        
+        .door.closed#door-left { transform: translateX(0); }
+        .door.closed#door-right { transform: translateX(0); }
+
+        /* Jumpscare Screen */
+        #jumpscare-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            color: #ff0000;
+            font-size: 2rem;
+            animation: jumpscare-flash 0.1s infinite alternate;
+        }
+        
+        @keyframes jumpscare-flash {
+            from { background-color: #000; }
+            to { background-color: #500; }
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+
+    <!-- Jumpscare/Game Over Screen -->
+    <div id="jumpscare-screen">
+        <div class="text-9xl mb-4" id="jumpscare-emoji">🐻</div>
+        <div class="text-4xl font-extrabold mb-4">GOTCHA!</div>
+        <div class="text-xl">GAME OVER</div>
+        <button onclick="startGame()" class="mt-8 px-6 py-3 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 transition">Restart Night</button>
+    </div>
+
+    <!-- The Office View -->
+    <div id="office">
+        <!-- Doors -->
+        <div id="door-left" class="door"></div>
+        <div id="door-right" class="door"></div>
+
+        <!-- Door Controls -->
+        <div class="door-control left">
+            <button id="light-left" onclick="toggleLight('left')" class="control-button bg-yellow-600 hover:bg-yellow-500">
+                <i data-lucide="flashlight" class="w-4 h-4 mx-auto mb-0.5"></i> LIGHT
+            </button>
+            <button id="door-btn-left" onclick="toggleDoor('left')" class="control-button bg-red-700 hover:bg-red-600">
+                <i data-lucide="lock" class="w-4 h-4 mx-auto mb-0.5"></i> DOOR
+            </button>
+        </div>
+        
+        <div class="door-control right">
+            <button id="light-right" onclick="toggleLight('right')" class="control-button bg-yellow-600 hover:bg-yellow-500">
+                <i data-lucide="flashlight" class="w-4 h-4 mx-auto mb-0.5"></i> LIGHT
+            </button>
+            <button id="door-btn-right" onclick="toggleDoor('right')" class="control-button bg-red-700 hover:bg-red-600">
+                <i data-lucide="lock" class="w-4 h-4 mx-auto mb-0.5"></i> DOOR
+            </button>
+        </div>
+
+        <!-- Center Information -->
+        <div class="text-center mt-20 p-4 bg-black/50 rounded-lg border border-gray-700 shadow-xl">
+            <h1 class="text-2xl font-bold text-red-500 mb-1">BOB'S BAKERY</h1>
+            <div id="time-display" class="text-4xl font-mono">12 AM</div>
+            <div id="power-display" class="text-xl mt-2 text-green-400">POWER: 100%</div>
+        </div>
+
+        <!-- Camera Button -->
+        <button id="camera-toggle" onclick="toggleCamera(true)" class="absolute bottom-4 mx-auto px-6 py-2 bg-blue-700 text-white font-bold rounded-full shadow-lg hover:bg-blue-600 transition">
+            <i data-lucide="monitor" class="w-5 h-5 mr-1 inline-block"></i> CAMERAS
+        </button>
+
+    </div>
+
+    <!-- Camera Monitor Overlay -->
+    <div id="camera-screen">
+        <h2 class="text-2xl font-bold mb-4 flex justify-between items-center">
+            Security Feed
+            <span id="cam-power-drain" class="text-red-500 text-sm"></span>
+        </h2>
+        
+        <div id="camera-grid" class="flex-grow grid grid-cols-2 gap-3 overflow-y-auto pb-4">
+            <!-- Camera Views Rendered Here -->
+        </div>
+
+        <button onclick="toggleCamera(false)" class="mt-4 px-6 py-2 bg-red-700 text-white font-bold rounded-full shadow-lg hover:bg-red-600 transition">
+            <i data-lucide="x-circle" class="w-5 h-5 mr-1 inline-block"></i> CLOSE MONITOR
+        </button>
+    </div>
+
+    <!-- Game Status Display (Start screen / Instructions) -->
+    <div id="start-screen" class="absolute inset-0 bg-black z-50 flex flex-col justify-center items-center p-8 text-center">
+        <h1 class="text-5xl font-extrabold text-red-500 mb-4">FIVE NIGHTS AT BOB'S</h1>
+        <p class="text-xl mb-6">Welcome to your new job, Night Guard.</p>
+        <p class="mb-8 text-sm text-gray-400">Survive from 12 AM to 6 AM. Use the **Doors** and **Lights** carefully. The **Cameras** drain power slower, but the Doors cost dearly. Don't let Bob or his friends reach your office!</p>
+        <button id="start-btn" onclick="startGame()" class="px-8 py-4 bg-green-600 text-white text-xl font-bold rounded-lg shadow-2xl hover:bg-green-700 transition transform hover:scale-105">
+            START NIGHT 1
+        </button>
+    </div>
+
+</div>
+
+<script>
+    // Using an IIFE to create a local scope for variables and safely expose global functions for HTML inline handlers.
+    (function() {
+
+        // --- Game State ---
+        const ANIMATRONICS = [
+            { id: 'bob', name: 'Bob the Bear', emoji: '🐻', location: 'C_MAIN', speed: 10 },
+            { id: 'carol', name: 'Carol the Croissant', emoji: '🥐', location: 'C_KITCHEN', speed: 15 },
+            { id: 'ted', name: 'Ted the Toast', emoji: '🍞', location: 'C_HALL', speed: 25 },
+            { id: 'gary', name: 'Gary the Gator', emoji: '🐊', location: 'C_STORAGE', speed: 20 }
+        ];
+
+        const LOCATIONS = {
+            'C_MAIN': 'Main Stage',
+            'C_HALL': 'West Hallway',
+            'C_KITCHEN': 'Kitchen',
+            'C_STORAGE': 'Storage Room',
+            'C_LEFT_DOOR': 'Left Door Hall',
+            'C_RIGHT_DOOR': 'Right Door Hall',
+            'OFFICE': 'The Office'
+        };
+        
+        // Power drain rates (percent per second)
+        const POWER_DRAIN = {
+            BASE: 0.2,
+            DOOR: 0.7,
+            LIGHT: 0.5,
+            CAMERA: 0.1
+        };
+
+        let gameState = {
+            power: 100,
+            hour: 12, // AM
+            minute: 0,
+            isCameraActive: false,
+            doors: { left: false, right: false },
+            lights: { left: false, right: false },
+            isGameOver: true,
+            timers: {},
+            animatronics: JSON.parse(JSON.stringify(ANIMATRONICS)) // Deep copy
+        };
+
+        // --- DOM Elements ---
+        const D = {
+            office: document.getElementById('office'),
+            powerDisplay: document.getElementById('power-display'),
+            timeDisplay: document.getElementById('time-display'),
+            cameraScreen: document.getElementById('camera-screen'),
+            jumpscareScreen: document.getElementById('jumpscare-screen'),
+            startScreen: document.getElementById('start-screen'),
+            doorLeft: document.getElementById('door-left'),
+            doorRight: document.getElementById('door-right'),
+            lightLeft: document.getElementById('light-left'),
+            lightRight: document.getElementById('light-right'),
+            doorBtnLeft: document.getElementById('door-btn-left'),
+            doorBtnRight: document.getElementById('door-btn-right'),
+            cameraGrid: document.getElementById('camera-grid'),
+            jumpscareEmoji: document.getElementById('jumpscare-emoji')
+        };
+        
+        // Helper to initialize Lucide Icons
+        const initIcons = () => { lucide.createIcons(); };
+
+
+        // --- Game Logic ---
+
+        // Expose startGame globally so the HTML button can call it
+        window.startGame = function() {
+            // Reset state
+            gameState.power = 100;
+            gameState.hour = 12;
+            gameState.minute = 0;
+            gameState.isCameraActive = false;
+            gameState.doors = { left: false, right: false };
+            gameState.lights = { left: false, right: false };
+            gameState.isGameOver = false;
+            gameState.animatronics = JSON.parse(JSON.stringify(ANIMATRONICS));
+
+            // Clear timers
+            Object.values(gameState.timers).forEach(clearInterval);
+            gameState.timers = {};
+            
+            D.office.style.backgroundColor = '#222';
+            D.jumpscareScreen.style.display = 'none';
+            D.startScreen.style.display = 'none';
+            
+            // Initial setup
+            window.toggleDoor('left', false);
+            window.toggleDoor('right', false);
+            window.toggleLight('left', false);
+            window.toggleLight('right', false);
+            window.toggleCamera(false);
+            renderCameraGrid();
+            updateUI();
+
+            // Start game loops
+            gameState.timers.power = setInterval(drainPower, 1000);
+            gameState.timers.time = setInterval(advanceTime, 5000); // 5 seconds per minute
+            gameState.timers.ai = setInterval(moveAnimatronics, 1000); // Check movement every second
+        }
+
+        function endGame(reason, emoji = '💀') {
+            if (gameState.isGameOver) return;
+            gameState.isGameOver = true;
+            
+            Object.values(gameState.timers).forEach(clearInterval);
+            
+            D.jumpscareEmoji.innerText = emoji;
+            D.jumpscareScreen.querySelector('.text-4xl').innerText = reason;
+            D.jumpscareScreen.style.display = 'flex';
+        }
+
+        // --- Core Mechanics ---
+
+        function drainPower() {
+            if (gameState.isGameOver) return;
+
+            let drainRate = POWER_DRAIN.BASE;
+
+            // Doors drain
+            if (gameState.doors.left) drainRate += POWER_DRAIN.DOOR;
+            if (gameState.doors.right) drainRate += POWER_DRAIN.DOOR;
+
+            // Lights drain
+            if (gameState.lights.left) drainRate += POWER_DRAIN.LIGHT;
+            if (gameState.lights.right) drainRate += POWER_DRAIN.LIGHT;
+
+            // Camera drain
+            if (gameState.isCameraActive) drainRate += POWER_DRAIN.CAMERA;
+
+            // Apply drain
+            gameState.power = Math.max(0, gameState.power - drainRate);
+            
+            // Update camera power display
+            document.getElementById('cam-power-drain').innerText = `Drain: ${drainRate.toFixed(1)}%/s`;
+
+            if (gameState.power <= 0) {
+                gameState.power = 0;
+                // Power outage condition
+                D.office.style.backgroundColor = '#000';
+                endGame("POWER OUT!", '💡');
+                // Disable controls
+                D.doorBtnLeft.disabled = true;
+                D.doorBtnRight.disabled = true;
+                D.lightLeft.disabled = true;
+                D.lightRight.disabled = true;
+            }
+            updateUI();
+        }
+        
+        function advanceTime() {
+            if (gameState.isGameOver || gameState.power <= 0) return;
+
+            gameState.minute += 1;
+            if (gameState.minute >= 60) {
+                gameState.minute = 0;
+                gameState.hour += 1;
+                
+                if (gameState.hour > 12) {
+                    gameState.hour = 1;
+                }
+            }
+            
+            // Win condition
+            if (gameState.hour === 6) {
+                endGame("YOU SURVIVED!", '🏆');
+                return;
+            }
+
+            updateUI();
+        }
+
+        function moveAnimatronics() {
+            if (gameState.isGameOver || gameState.power <= 0) return;
+
+            gameState.animatronics.forEach(bot => {
+                const roll = Math.floor(Math.random() * 100);
+                
+                // AI moves based on its speed
+                if (roll < bot.speed) {
+                    const currentLocation = bot.location;
+                    let nextLocation = '';
+
+                    // Define movement logic based on current location (Simplified)
+                    switch (currentLocation) {
+                        case 'C_MAIN': 
+                        case 'C_HALL':
+                        case 'C_KITCHEN':
+                        case 'C_STORAGE':
+                            // Move to a door hallway
+                            nextLocation = (Math.random() < 0.5) ? 'C_LEFT_DOOR' : 'C_RIGHT_DOOR';
+                            break;
+                        case 'C_LEFT_DOOR':
+                            // If door is closed, stay put (50% chance) or retreat (50% chance)
+                            if (gameState.doors.left) {
+                                nextLocation = (Math.random() < 0.5) ? 'C_LEFT_DOOR' : 'C_HALL'; 
+                            } else {
+                                // Door is open, attempt to enter the office
+                                nextLocation = 'OFFICE';
+                            }
+                            break;
+                        case 'C_RIGHT_DOOR':
+                            // If door is closed, stay put (50% chance) or retreat (50% chance)
+                            if (gameState.doors.right) {
+                                nextLocation = (Math.random() < 0.5) ? 'C_RIGHT_DOOR' : 'C_HALL'; 
+                            } else {
+                                // Door is open, attempt to enter the office
+                                nextLocation = 'OFFICE';
+                            }
+                            break;
+                    }
+
+                    if (nextLocation && nextLocation !== currentLocation) {
+                        bot.location = nextLocation;
+                    }
+                }
+                
+                // Check for immediate Jumpscare
+                if (bot.location === 'OFFICE') {
+                    endGame(`SCARED BY ${bot.name.toUpperCase()}!`, bot.emoji);
+                }
+            });
+
+            // Update camera display every time AI moves
+            if (gameState.isCameraActive) renderCameraGrid(); 
+        }
+
+        // --- Control Handlers ---
+        
+        // Expose toggleDoor globally
+        window.toggleDoor = function(side, forceState = null) {
+            if (gameState.power <= 0 || gameState.isGameOver) return;
+
+            const newState = (forceState !== null) ? forceState : !gameState.doors[side];
+            
+            if (newState === true && gameState.power < 5) {
+                // Not enough power to hold the door shut
+                return; 
+            }
+
+            gameState.doors[side] = newState;
+
+            D[`door${side.charAt(0).toUpperCase() + side.slice(1)}`].classList.toggle('closed', newState);
+            D[`doorBtn${side.charAt(0).toUpperCase() + side.slice(1)}`].classList.toggle('bg-green-600', newState);
+            D[`doorBtn${side.charAt(0).toUpperCase() + side.slice(1)}`].classList.toggle('bg-red-700', !newState);
+            D[`doorBtn${side.charAt(0).toUpperCase() + side.slice(1)}`].innerHTML = newState ? '<i data-lucide="lock" class="w-4 h-4 mx-auto mb-0.5"></i> CLOSED' : '<i data-lucide="lock-open" class="w-4 h-4 mx-auto mb-0.5"></i> DOOR';
+
+            // Power consumption update is handled by the drainPower loop
+            updateUI();
+        }
+        
+        // Expose toggleLight globally
+        window.toggleLight = function(side, forceState = null) {
+            if (gameState.power <= 0 || gameState.isGameOver) return;
+
+            const newState = (forceState !== null) ? forceState : !gameState.lights[side];
+            
+            if (newState === true && gameState.power < 2) {
+                // Not enough power for light
+                return; 
+            }
+
+            gameState.lights[side] = newState;
+
+            D.office.style.backgroundColor = newState ? '#333' : '#222';
+
+            D[`light${side.charAt(0).toUpperCase() + side.slice(1)}`].classList.toggle('bg-yellow-500', newState);
+            D[`light${side.charAt(0).toUpperCase() + side.slice(1)}`].classList.toggle('bg-yellow-600', !newState);
+            D[`light${side.charAt(0).toUpperCase() + side.slice(1)}`].innerHTML = newState ? '<i data-lucide="sun" class="w-4 h-4 mx-auto mb-0.5"></i> LIT' : '<i data-lucide="flashlight" class="w-4 h-4 mx-auto mb-0.5"></i> LIGHT';
+
+            checkLightInteraction(side, newState);
+            updateUI();
+
+            // Turn off light automatically after a short pulse to save power
+            if (newState) {
+                setTimeout(() => window.toggleLight(side, false), 1000); // Light is only active for 1 second
+            }
+        }
+
+        // Expose toggleCamera globally
+        window.toggleCamera = function(isActive) {
+            if (gameState.power <= 0 || gameState.isGameOver) return;
+
+            gameState.isCameraActive = isActive;
+            D.cameraScreen.classList.toggle('active', isActive);
+            if (isActive) {
+                renderCameraGrid();
+            }
+            updateUI();
+        }
+
+        function checkLightInteraction(side, lightOn) {
+            if (!lightOn) return;
+
+            const checkLocation = side === 'left' ? 'C_LEFT_DOOR' : 'C_RIGHT_DOOR';
+            
+            const threat = gameState.animatronics.find(bot => bot.location === checkLocation);
+            
+            if (threat) {
+                const sideName = side.charAt(0).toUpperCase() + side.slice(1);
+                const statusElement = D[`light${sideName}`];
+
+                // Brief visual cue that something is there
+                statusElement.classList.add('animate-pulse', 'bg-red-500');
+                setTimeout(() => {
+                    statusElement.classList.remove('animate-pulse', 'bg-red-500');
+                }, 500);
+
+                // Change door text to warn player
+                D[`doorBtn${sideName}`].querySelector('i').nextSibling.textContent = " DANGER! "
+
+            } else {
+                const sideName = side.charAt(0).toUpperCase() + side.slice(1);
+                D[`doorBtn${sideName}`].querySelector('i').nextSibling.textContent = gameState.doors[side] ? " CLOSED" : " DOOR";
+            }
+        }
+
+        // --- Rendering ---
+        
+        function renderCameraGrid() {
+            let html = '';
+            
+            // Show all locations except the office
+            const locations = Object.keys(LOCATIONS).filter(loc => loc !== 'OFFICE');
+
+            locations.forEach(locationKey => {
+                const occupants = gameState.animatronics.filter(bot => bot.location === locationKey);
+                const statusText = occupants.length > 0 
+                    ? occupants.map(bot => bot.emoji).join(' ') + ' MOVEMENT!'
+                    : 'All clear.';
+
+                html += `
+                    <div class="camera-view">
+                        <div class="text-xs font-bold mb-1">${locationKey.replace('C_', 'CAM ')}: ${LOCATIONS[locationKey]}</div>
+                        <div class="text-4xl text-center">${occupants.length > 0 ? occupants.map(bot => bot.emoji).join(' ') : '⚫'}</div>
+                        <div class="text-xs text-center mt-1 text-yellow-400">${statusText}</div>
+                    </div>
+                `;
+            });
+
+            D.cameraGrid.innerHTML = html;
+            initIcons();
+        }
+
+        function updateUI() {
+            D.powerDisplay.innerText = `POWER: ${gameState.power.toFixed(1)}%`;
+            
+            // Set power color
+            if (gameState.power < 20) {
+                D.powerDisplay.classList.add('text-red-500');
+                D.powerDisplay.classList.remove('text-green-400', 'text-yellow-400');
+            } else if (gameState.power < 50) {
+                D.powerDisplay.classList.add('text-yellow-400');
+                D.powerDisplay.classList.remove('text-green-400', 'text-red-500');
+            } else {
+                D.powerDisplay.classList.add('text-green-400');
+                D.powerDisplay.classList.remove('text-yellow-400', 'text-red-500');
+            }
+
+            const minuteDisplay = gameState.minute < 10 ? `0${gameState.minute}` : gameState.minute;
+            D.timeDisplay.innerText = `${gameState.hour} AM`;
+            
+            // Disable controls if camera is up
+            const isControlDisabled = gameState.isCameraActive || gameState.isGameOver || gameState.power <= 0;
+            D.doorBtnLeft.disabled = isControlDisabled;
+            D.doorBtnRight.disabled = isControlDisabled;
+            D.lightLeft.disabled = isControlDisabled;
+            D.lightRight.disabled = isControlDisabled;
+        }
+        
+        // --- Initialization ---
+        window.onload = () => {
+            initIcons();
+            // The start screen is displayed by default, waiting for user click
+        };
+        
+    })(); // End IIFE
+</script>
+</body>
+</html>
